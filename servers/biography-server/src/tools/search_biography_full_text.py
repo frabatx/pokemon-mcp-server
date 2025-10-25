@@ -1,7 +1,33 @@
 from mcp.types import TextContent
-from .register import register_biography, ToolArguments, BiographiesDict, ToolResult
+from .register import (
+    register_tool,
+    ToolNames,
+    ToolArguments,
+    BiographiesDict,
+    ToolResult
+)
 
-@register_biography("search_biography_fulltext")
+
+@register_tool(
+    name=ToolNames.SEARCH_BIOGRAPHY_FULLTEXT,
+    description="Full-text search in Pokemon biographies. "
+                "Useful to find Pokemon with specific characteristics.",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "Search text (e.g., 'electric type', 'evolves')"
+            },
+            "max_results": {
+                "type": "integer",
+                "description": "Maximum number of results",
+                "default": 5
+            }
+        },
+        "required": ["query"]
+    }
+)
 async def search_biography_fulltext(
     arguments: ToolArguments,
     bios: BiographiesDict

@@ -33,8 +33,7 @@ class ToolMetadata:
     name: str
     description: str
     input_schema: dict[str, Any]
-    # Opzionale: output_schema per validazione
-    output_schema: dict[str, Any] | None = None
+    output_schema: dict[str, Any] | None = None # Opzionale: output_schema per validazione
 
 
 @dataclass

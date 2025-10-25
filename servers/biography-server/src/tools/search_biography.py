@@ -1,9 +1,30 @@
 from mcp.types import TextContent
-from .register import register_biography, ToolArguments, BiographiesDict, ToolResult
+from .register import (
+    register_tool,
+    ToolNames,
+    ToolArguments,
+    BiographiesDict,
+    ToolResult
+)
 
-@register_biography("search_biography")
+
+@register_tool(
+    name=ToolNames.SEARCH_BIOGRAPHY,
+    description="Search for a Pokemon biography by name. "
+                "Returns detailed information about biology, habitat and characteristics.",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string",
+                "description": "Pokemon name (e.g., 'Pikachu', 'Charizard')"
+            }
+        },
+        "required": ["name"]
+    }
+)
 async def search_biography(
-    arguments: ToolArguments,  # Usa i type alias
+    arguments: ToolArguments,
     bios: BiographiesDict
 ) -> ToolResult:
     """Cerca la biografia di un Pokemon per nome."""

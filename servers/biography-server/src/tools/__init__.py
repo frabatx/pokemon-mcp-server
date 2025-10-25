@@ -5,7 +5,6 @@ Auto-registrazione di tutti i tool all'import.
 
 # Export del decorator e type aliases
 from .register import (
-    register_biography,
     ToolArguments,
     BiographiesDict,
     ToolResult,
