@@ -1005,8 +1005,8 @@ MIT License - see [LICENSE](LICENSE) for details.
 ## Authors
 
 **Francesco Battista** - *Initial work*
-- GitHub: [@your-username](https://github.com/your-username)
-- LinkedIn: [Your Profile](https://linkedin.com/in/your-profile)
+- GitHub: [@frabatx](https://github.com/frabatx)
+- LinkedIn: [Francesco Battista](www.linkedin.com/in/francesco-battista-4b4329147)
 
 ---
 
@@ -1042,8 +1042,8 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/your-username/pokemon-mcp-servers/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-username/pokemon-mcp-servers/discussions)
+- **Issues**: [GitHub Issues](https://github.com/frabatx/pokemon-mcp-servers/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/frabatx/pokemon-mcp-servers/discussions)
 
 ---
 
