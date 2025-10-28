@@ -13,7 +13,6 @@ build/
 
 # UV
 .venv/
-uv.lock
 
 # Environment variables
 .env
