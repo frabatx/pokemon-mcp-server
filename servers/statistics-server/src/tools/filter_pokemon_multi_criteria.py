@@ -1,3 +1,5 @@
+# servers/statistics-server/src/tools/filter_pokemon_multi_criteria.py
+
 """
 Tool: filter_pokemon_multi_criteria
 
@@ -10,13 +12,32 @@ Questo tool:
 - Ordina risultati per qualsiasi colonna
 - Limita numero risultati
 
+TUTTI I FILTRI SONO OPZIONALI - specifica solo quelli che ti interessano!
+
 NON fa:
 - Suggerimenti su quali Pokemon scegliere (lavoro LLM)
 - Valutazioni strategiche
 - Team building advice
 
 Input:
-    Dizionario con tutti i filtri opzionali (types, min_stats, max_stats, etc)
+    Filtri disponibili (tutti opzionali):
+    - type1, type2: Filtra per tipi
+    - min_hp, max_hp: Range HP
+    - min_attack, max_attack: Range Attack
+    - min_defense, max_defense: Range Defense
+    - min_sp_attack, max_sp_attack: Range Special Attack
+    - min_sp_defense, max_sp_defense: Range Special Defense
+    - min_speed, max_speed: Range Speed
+    - min_base_total, max_base_total: Range Base Stat Total
+    - min_weight_kg, max_weight_kg: Range peso
+    - min_height_m, max_height_m: Range altezza
+    - generation: Numero generazione (1-9)
+    - is_legendary: true/false
+    - min_capture_rate: Minimo capture rate
+    - abilities: Lista abilities (match almeno una)
+    - sort_by: Colonna per ordinamento
+    - ascending: Ordine crescente/decrescente
+    - limit: Numero max risultati
 
 Output:
     Lista Pokemon che matchano TUTTI i criteri specificati
@@ -39,60 +60,178 @@ def parse_abilities_list(abilities_str: str) -> list[str]:
 @register_tool(
     name=ToolNames.FILTER_POKEMON_MULTI_CRITERIA,
     description=(
-        "Advanced multi-criteria filter for Pokemon. Combines multiple filters with AND logic "
-        "including types, stat ranges, generation, legendary status, abilities, and physical "
-        "attributes. Returns Pokemon matching ALL specified criteria."
+        "Advanced multi-criteria filter for Pokemon. ALL filters are optional - specify only "
+        "what you need. Combines filters with AND logic. Available filters: types (type1/type2), "
+        "stat ranges (min/max for hp/attack/defense/sp_attack/sp_defense/speed/base_total), "
+        "physical attributes (weight_kg, height_m), generation, legendary status, capture_rate, "
+        "and abilities. Results can be sorted by any column."
     ),
     input_schema={
         "type": "object",
         "properties": {
-            "types": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Filter by type (matches type1 OR type2). Can be 1-2 types.",
+            # TYPE FILTERS
+            "type1": {
+                "type": "string",
+                "description": "Filter by primary type (e.g., 'fire', 'water'). Matches type1 field.",
             },
-            "min_stats": {
-                "type": "object",
-                "description": "Minimum stat values (e.g., {'hp': 70, 'speed': 80})",
+            "type2": {
+                "type": "string",
+                "description": "Filter by secondary type (e.g., 'flying'). Matches type2 field. Use null or omit for mono-types.",
             },
-            "max_stats": {
-                "type": "object",
-                "description": "Maximum stat values (e.g., {'weight_kg': 100})",
+            # HP FILTERS
+            "min_hp": {
+                "type": "integer",
+                "description": "Minimum HP value (inclusive)",
+                "minimum": 1,
             },
-            "generations": {
-                "type": "array",
-                "items": {"type": "integer"},
-                "description": "Filter by generation numbers (e.g., [1, 2])",
+            "max_hp": {
+                "type": "integer",
+                "description": "Maximum HP value (inclusive)",
+                "maximum": 255,
+            },
+            # ATTACK FILTERS
+            "min_attack": {
+                "type": "integer",
+                "description": "Minimum Attack value (inclusive)",
+                "minimum": 1,
+            },
+            "max_attack": {
+                "type": "integer",
+                "description": "Maximum Attack value (inclusive)",
+                "maximum": 255,
+            },
+            # DEFENSE FILTERS
+            "min_defense": {
+                "type": "integer",
+                "description": "Minimum Defense value (inclusive)",
+                "minimum": 1,
+            },
+            "max_defense": {
+                "type": "integer",
+                "description": "Maximum Defense value (inclusive)",
+                "maximum": 255,
+            },
+            # SPECIAL ATTACK FILTERS
+            "min_sp_attack": {
+                "type": "integer",
+                "description": "Minimum Special Attack value (inclusive)",
+                "minimum": 1,
+            },
+            "max_sp_attack": {
+                "type": "integer",
+                "description": "Maximum Special Attack value (inclusive)",
+                "maximum": 255,
+            },
+            # SPECIAL DEFENSE FILTERS
+            "min_sp_defense": {
+                "type": "integer",
+                "description": "Minimum Special Defense value (inclusive)",
+                "minimum": 1,
+            },
+            "max_sp_defense": {
+                "type": "integer",
+                "description": "Maximum Special Defense value (inclusive)",
+                "maximum": 255,
+            },
+            # SPEED FILTERS
+            "min_speed": {
+                "type": "integer",
+                "description": "Minimum Speed value (inclusive)",
+                "minimum": 1,
+            },
+            "max_speed": {
+                "type": "integer",
+                "description": "Maximum Speed value (inclusive)",
+                "maximum": 255,
+            },
+            # BASE TOTAL FILTERS
+            "min_base_total": {
+                "type": "integer",
+                "description": "Minimum Base Stat Total (inclusive)",
+                "minimum": 1,
+            },
+            "max_base_total": {
+                "type": "integer",
+                "description": "Maximum Base Stat Total (inclusive)",
+                "maximum": 1000,
+            },
+            # PHYSICAL ATTRIBUTES
+            "min_weight_kg": {
+                "type": "number",
+                "description": "Minimum weight in kilograms (inclusive)",
+            },
+            "max_weight_kg": {
+                "type": "number",
+                "description": "Maximum weight in kilograms (inclusive)",
+            },
+            "min_height_m": {
+                "type": "number",
+                "description": "Minimum height in meters (inclusive)",
+            },
+            "max_height_m": {
+                "type": "number",
+                "description": "Maximum height in meters (inclusive)",
+            },
+            # GAME MECHANICS
+            "generation": {
+                "type": "integer",
+                "description": "Filter by generation number (1-9)",
+                "minimum": 1,
+                "maximum": 9,
             },
             "is_legendary": {
                 "type": "boolean",
-                "description": "Filter legendary (true) or non-legendary (false)",
+                "description": "Filter legendary (true) or non-legendary (false) Pokemon",
             },
             "min_capture_rate": {
                 "type": "integer",
-                "description": "Minimum capture rate (higher = easier to catch)",
+                "description": "Minimum capture rate (higher = easier to catch, range 3-255)",
+                "minimum": 3,
+                "maximum": 255,
             },
+            # ABILITIES
             "abilities": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "Filter Pokemon with any of these abilities",
+                "description": "Filter Pokemon with ANY of these abilities (e.g., ['Levitate', 'Blaze'])",
             },
+            # SORTING & LIMITING
             "sort_by": {
                 "type": "string",
-                "description": "Column to sort by (e.g., 'base_total', 'speed')",
+                "description": "Column to sort results by",
+                "enum": [
+                    "name",
+                    "pokedex_number",
+                    "base_total",
+                    "hp",
+                    "attack",
+                    "defense",
+                    "sp_attack",
+                    "sp_defense",
+                    "speed",
+                    "weight_kg",
+                    "height_m",
+                    "capture_rate",
+                    "base_happiness",
+                    "generation",
+                ],
                 "default": "base_total",
             },
             "ascending": {
                 "type": "boolean",
-                "description": "Sort order (true = ascending, false = descending)",
+                "description": "Sort order: true = ascending (lowest first), false = descending (highest first)",
                 "default": False,
             },
             "limit": {
                 "type": "integer",
                 "description": "Maximum number of results to return",
                 "default": 20,
+                "minimum": 1,
+                "maximum": 100,
             },
         },
+        # NESSUN campo è required!
+        "additionalProperties": False,  # Previene parametri non documentati
     },
 )
 async def filter_pokemon_multi_criteria(
@@ -101,47 +240,89 @@ async def filter_pokemon_multi_criteria(
     """
     Filtra Pokemon con criteri multipli combinati.
     """
+    # Copia DataFrame per non modificare originale
     filtered_df = df.copy()
+    applied_filters = []  # Track quali filtri sono stati applicati
 
-    # FILTRO 1: Types
-    types_filter = arguments.get("types", [])
-    if types_filter:
-        types_lower = [t.lower() for t in types_filter]
-        filtered_df = filtered_df[
-            filtered_df["type1"].str.lower().isin(types_lower)
-            | filtered_df["type2"].str.lower().isin(types_lower)
-        ]
+    # FILTRO: Type1
+    type1 = arguments.get("type1")
+    if type1:
+        type1_lower = type1.lower()
+        filtered_df = filtered_df[filtered_df["type1"].str.lower() == type1_lower]
+        applied_filters.append(f"type1={type1.capitalize()}")
 
-    # FILTRO 2: Min stats
-    min_stats = arguments.get("min_stats", {})
-    for stat, min_val in min_stats.items():
-        if stat in filtered_df.columns:
-            filtered_df = filtered_df[filtered_df[stat] >= min_val]
+    # FILTRO: Type2
+    type2 = arguments.get("type2")
+    if type2:
+        type2_lower = type2.lower()
+        filtered_df = filtered_df[filtered_df["type2"].str.lower() == type2_lower]
+        applied_filters.append(f"type2={type2.capitalize()}")
 
-    # FILTRO 3: Max stats
-    max_stats = arguments.get("max_stats", {})
-    for stat, max_val in max_stats.items():
-        if stat in filtered_df.columns:
-            filtered_df = filtered_df[filtered_df[stat] <= max_val]
+    # FILTRI: Stats (min/max)
+    stat_filters = {
+        "hp": ("min_hp", "max_hp"),
+        "attack": ("min_attack", "max_attack"),
+        "defense": ("min_defense", "max_defense"),
+        "sp_attack": ("min_sp_attack", "max_sp_attack"),
+        "sp_defense": ("min_sp_defense", "max_sp_defense"),
+        "speed": ("min_speed", "max_speed"),
+        "base_total": ("min_base_total", "max_base_total"),
+    }
 
-    # FILTRO 4: Generations
-    generations = arguments.get("generations", [])
-    if generations:
-        filtered_df = filtered_df[filtered_df["generation"].isin(generations)]
+    for stat_col, (min_key, max_key) in stat_filters.items():
+        min_val = arguments.get(min_key)
+        max_val = arguments.get(max_key)
 
-    # FILTRO 5: Legendary status
+        if min_val is not None:
+            filtered_df = filtered_df[filtered_df[stat_col] >= min_val]
+            applied_filters.append(f"{stat_col}>={min_val}")
+
+        if max_val is not None:
+            filtered_df = filtered_df[filtered_df[stat_col] <= max_val]
+            applied_filters.append(f"{stat_col}<={max_val}")
+
+    # FILTRI: Physical attributes
+    min_weight = arguments.get("min_weight_kg")
+    if min_weight is not None:
+        filtered_df = filtered_df[filtered_df["weight_kg"] >= min_weight]
+        applied_filters.append(f"weight>={min_weight}kg")
+
+    max_weight = arguments.get("max_weight_kg")
+    if max_weight is not None:
+        filtered_df = filtered_df[filtered_df["weight_kg"] <= max_weight]
+        applied_filters.append(f"weight<={max_weight}kg")
+
+    min_height = arguments.get("min_height_m")
+    if min_height is not None:
+        filtered_df = filtered_df[filtered_df["height_m"] >= min_height]
+        applied_filters.append(f"height>={min_height}m")
+
+    max_height = arguments.get("max_height_m")
+    if max_height is not None:
+        filtered_df = filtered_df[filtered_df["height_m"] <= max_height]
+        applied_filters.append(f"height<={max_height}m")
+
+    # FILTRO: Generation
+    generation = arguments.get("generation")
+    if generation is not None:
+        filtered_df = filtered_df[filtered_df["generation"] == generation]
+        applied_filters.append(f"gen={generation}")
+
+    # FILTRO: Legendary status
     is_legendary = arguments.get("is_legendary")
     if is_legendary is not None:
         filtered_df = filtered_df[
             filtered_df["is_legendary"] == (1 if is_legendary else 0)
         ]
+        applied_filters.append(f"legendary={'Yes' if is_legendary else 'No'}")
 
-    # FILTRO 6: Capture rate
+    # FILTRO: Capture rate
     min_capture = arguments.get("min_capture_rate")
     if min_capture is not None:
         filtered_df = filtered_df[filtered_df["capture_rate"] >= min_capture]
+        applied_filters.append(f"capture_rate>={min_capture}")
 
-    # FILTRO 7: Abilities
+    # FILTRO: Abilities
     abilities_filter = arguments.get("abilities", [])
     if abilities_filter:
 
@@ -155,12 +336,19 @@ async def filter_pokemon_multi_criteria(
         filtered_df = filtered_df[
             filtered_df["abilities"].apply(lambda x: has_ability(x, abilities_filter))
         ]
+        applied_filters.append(f"abilities={', '.join(abilities_filter)}")
 
     # Verifica risultati
     if filtered_df.empty:
+        filters_str = "\n".join([f"  - {f}" for f in applied_filters])
         return [
             TextContent(
-                type="text", text="❌ No Pokemon found matching all specified criteria."
+                type="text",
+                text=f"""❌ No Pokemon found matching all criteria.
+
+**Applied Filters**:
+{filters_str if applied_filters else "  - None (no filters specified)"}
+""",
             )
         ]
 
@@ -172,10 +360,17 @@ async def filter_pokemon_multi_criteria(
 
     # Limita risultati
     limit = arguments.get("limit", 20)
+    total_found = len(filtered_df)
     filtered_df = filtered_df.head(limit)
 
     # Formatta output
-    result_lines = [f"## Filtered Pokemon ({len(filtered_df)} results)\n"]
+    filters_str = " & ".join(applied_filters) if applied_filters else "No filters"
+
+    result_lines = [
+        f"## Filtered Pokemon",
+        f"\n**Filters Applied**: {filters_str}",
+        f"**Results**: {total_found} Pokemon found (showing {len(filtered_df)})\n",
+    ]
 
     for idx, row in filtered_df.iterrows():
         types_str = row["type1"].capitalize()
@@ -193,7 +388,8 @@ async def filter_pokemon_multi_criteria(
             f"SpA {int(row['sp_attack'])} | SpD {int(row['sp_defense'])} | Spe {int(row['speed'])}\n"
             f"  - Abilities: {abilities_str}\n"
             f"  - Gen {int(row['generation'])}"
-            f"{' | Legendary' if row['is_legendary'] == 1 else ''}\n"
+            f"{' | Legendary 👑' if row['is_legendary'] == 1 else ''}"
+            f" | Weight {row['weight_kg']:.1f}kg | Height {row['height_m']:.1f}m\n"
         )
 
     return [TextContent(type="text", text="\n".join(result_lines))]

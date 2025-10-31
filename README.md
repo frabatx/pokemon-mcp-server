@@ -1,6 +1,23 @@
 # Pokemon MCP Servers
-
 A collection of **Model Context Protocol (MCP)** servers for accessing Pokemon data through AI assistants like Claude Desktop, Cursor, and other MCP clients.
+
+## 🚀 Quick Start
+### Prerequisites
+
+- **Docker Desktop** installed and running
+- **Python 3.12+** with **uv** package manager
+- **Node.js** (for MCP Inspector testing)
+
+### One-Command Setup
+```powershell
+# Clone repository
+git clone https://github.com/frabatx/pokemon-mcp-servers.git
+cd pokemon-mcp-servers
+
+# Run setup (does everything automatically!)
+.\setup.ps1
+```
+
 
 ## Overview
 

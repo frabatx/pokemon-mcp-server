@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Opening Pokemon Graph...</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: white;
+            overflow: hidden;
+        }
+
+        .container {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 50px 60px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(to right, #ffd700, #ff6b6b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            font-size: 1.2em;
+            margin-bottom: 30px;
+            opacity: 0.9;
+        }
+
+        .spinner {
+            border: 5px solid rgba(255, 255, 255, 0.3);
+            border-top: 5px solid #ffd700;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+            margin: 30px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .info {
+            margin-top: 30px;
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .pokemon-icons {
+            font-size: 3em;
+            margin: 20px 0;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .manual-link {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .manual-link a {
+            color: #ffd700;
+            text-decoration: none;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .manual-link a:hover {
+            color: #ffed4e;
+            text-decoration: underline;
+        }
+
+        .query-preview {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            text-align: left;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .query-preview code {
+            color: #a8e6cf;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="pokemon-icons">🎮 🔥 💧 🌿</div>
+
+        <h1>Pokemon Graph</h1>
+        <p class="subtitle">Opening Neo4j Browser...</p>
+
+        <div class="spinner"></div>
+
+        <p class="info">Loading visualization of Gen 1 Starters</p>
+
+        <div class="query-preview">
+            <code>
+                MATCH (p:Pokemon)<br>
+                WHERE p.name IN ['Bulbasaur', 'Charmander', 'Squirtle']<br>
+                OPTIONAL MATCH path = (p)-[:EVOLVES_TO*]->(e)<br>
+                RETURN p, path, e
+            </code>
+        </div>
+
+        <div class="manual-link">
+            <p style="font-size: 0.9em; opacity: 0.7;">
+                If browser doesn't open automatically, click
+                <a href="#" id="manual-link">here</a>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // ==================================
+        // PRE-LOADED QUERY CONFIGURATION
+        // ==================================
+
+        // Query to visualize Gen 1 starters with their evolution chains
+        const query = `
+MATCH (p:Pokemon)
+WHERE p.name IN ['Bulbasaur', 'Charmander', 'Squirtle']
+OPTIONAL MATCH path = (p)-[:EVOLVES_TO*]->(evolution)
+RETURN p, path, evolution
+        `.trim();
+
+        // Alternative queries you can use:
+
+        // Option 1: Just Charmander evolution
+        // const query = `MATCH path = (p:Pokemon {name: 'Charmander'})-[:EVOLVES_TO*]->(e) RETURN path`;
+
+        // Option 2: Overview of 50 random Pokemon
+        // const query = `MATCH (p:Pokemon) OPTIONAL MATCH path = (p)-[:EVOLVES_TO*]->(e) RETURN p, path, e LIMIT 50`;
+
+        // Option 3: All complete evolution chains
+        // const query = `MATCH path = (start:Pokemon)-[:EVOLVES_TO*]->(end:Pokemon) WHERE NOT ()-[:EVOLVES_TO]->(start) AND NOT (end)-[:EVOLVES_TO]->() RETURN path LIMIT 20`;
+
+        // ==================================
+        // NEO4J BROWSER URL GENERATION
+        // ==================================
+
+        const encodedQuery = encodeURIComponent(query);
+
+        // 'edit' mode: Query appears in editor (user can modify before running)
+        // 'play' mode: Query auto-executes (immediate visualization)
+        const mode = 'edit'; // Change to 'play' for auto-execution
+
+        const neo4jUrl = `http://localhost:7474/browser?cmd=${mode}&arg=${encodedQuery}`;
+
+        // ==================================
+        // AUTO-REDIRECT
+        // ==================================
+
+        // Redirect after 1.5 seconds
+        setTimeout(() => {
+            window.location.href = neo4jUrl;
+        }, 1500);
+
+        // Set manual link
+        document.getElementById('manual-link').href = neo4jUrl;
+
+        // Click handler for manual link (for tracking/debugging)
+        document.getElementById('manual-link').addEventListener('click', (e) => {
+            e.preventDefault();
+            window.location.href = neo4jUrl;
+        });
+    </script>
+</body>
+</html>

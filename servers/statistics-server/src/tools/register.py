@@ -117,7 +117,6 @@ async def call_tool_from_registry(
     sig = inspect.signature(func)
     params = list(sig.parameters.keys())
 
-    # Dispatch intelligente
     if len(params) == 1:
         return await func(stats_df)
     else:

@@ -1,0 +1,66 @@
+# docker-compose.yml
+# Pokemon MCP Servers - Infrastructure Services
+
+services:
+  # ==================================
+  # Neo4j - Pokemon Evolution Graph
+  # ==================================
+  neo4j:
+    image: neo4j:5.15-community
+    container_name: pokemon-neo4j
+    restart: unless-stopped
+
+    ports:
+      - "7474:7474"   # HTTP - Neo4j Browser
+      - "7687:7687"   # Bolt protocol
+
+    environment:
+      # Credentials from .env file
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD}
+
+      # Performance settings
+      NEO4J_dbms_memory_pagecache_size: 512M
+      NEO4J_dbms_memory_heap_initial__size: 512M
+      NEO4J_dbms_memory_heap_max__size: 1G
+
+      # Enable APOC plugin (useful for advanced queries)
+      NEO4J_PLUGINS: '["apoc"]'
+
+      # Logging
+      NEO4J_dbms_logs_debug_level: INFO
+
+    volumes:
+      # Persist database (survives container restart)
+      - neo4j-data:/data
+
+      # Persist logs
+      - neo4j-logs:/logs
+
+      # Mount Cypher script for import
+      - ./data/pokemon.cypher:/var/lib/neo4j/import/pokemon.cypher
+
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p ${NEO4J_PASSWORD} 'RETURN 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+    networks:
+      - pokemon-network
+
+# ==================================
+# VOLUMES
+# ==================================
+volumes:
+  neo4j-data:
+    driver: local
+  neo4j-logs:
+    driver: local
+
+# ==================================
+# NETWORKS
+# ==================================
+networks:
+  pokemon-network:
+    driver: bridge
