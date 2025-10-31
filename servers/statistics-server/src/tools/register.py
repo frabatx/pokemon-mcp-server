@@ -21,9 +21,28 @@ type ToolFn = Callable[..., Awaitable[ToolResult]]
 
 class ToolNames(StrEnum):
     GET_POKEMON_STATS = "get_pokemon_stats"
-    # COMPARE_POKEMON = "compare_pokemon"
-    # FILTER_BY_TYPE = "filter_by_type"
-    # TOP_ATTACKERS = "top_attackers"
+    # Type effectiveness & matchups
+    CALCULATE_TYPE_EFFECTIVENESS = "calculate_type_effectiveness"
+    GET_RESISTANCES_AND_WEAKNESSES = "get_resistances_and_weaknesses"
+    FIND_POKEMON_RESISTANT_TO_TYPES = "find_pokemon_resistant_to_types"
+
+    # Filtering & querying
+    FILTER_POKEMON_MULTI_CRITERIA = "filter_pokemon_multi_criteria"
+    GET_POKEMON_BY_STAT_RANGE = "get_pokemon_by_stat_range"
+    GET_POKEMON_BY_TYPE_COMBINATION = "get_pokemon_by_type_combination"
+    GET_POKEMON_BY_ABILITY = "get_pokemon_by_ability"
+    GET_POKEMON_BY_GENERATION = "get_pokemon_by_generation"
+
+    # Comparisons & rankings
+    COMPARE_POKEMON_HEAD_TO_HEAD = "compare_pokemon_head_to_head"
+    FIND_SIMILAR_POKEMON = "find_similar_pokemon"
+    GET_TOP_POKEMON_BY_STAT = "get_top_pokemon_by_stat"
+    GET_EXTREME_POKEMON = "get_extreme_pokemon"
+
+    # Statistics & aggregations
+    CALCULATE_STAT_PERCENTILE = "calculate_stat_percentile"
+    AGGREGATE_STATS_BY_TYPE = "aggregate_stats_by_type"
+    CALCULATE_BST_DISTRIBUTION = "calculate_bst_distribution"
 
 
 @dataclass
