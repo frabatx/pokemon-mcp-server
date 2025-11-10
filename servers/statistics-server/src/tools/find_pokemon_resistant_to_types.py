@@ -26,6 +26,13 @@ Output:
 from mcp.types import TextContent
 import pandas as pd
 from .register import register_tool, ToolNames, ToolArguments, ToolResult
+from utils.pokemon_helper import (
+    format_types,
+    safe_int,
+    tool_error,
+    tool_empty_result,
+    calculate_resistance_scores_vectorized,
+)
 
 
 @register_tool(
@@ -63,59 +70,46 @@ async def find_pokemon_resistant_to_types(
 ) -> ToolResult:
     """
     Trova Pokemon resistenti a tipi specifici.
+    OTTIMIZZATO: usa boolean mask e calcoli vettorizzati invece di loop.
     """
     resist_types = arguments.get("resist_types", [])
     max_multiplier = arguments.get("max_multiplier", 0.5)
     limit = arguments.get("limit", 20)
 
     if not resist_types:
-        return [
-            TextContent(
-                type="text", text="❌ Please specify at least one type to resist."
-            )
-        ]
+        return tool_error("Please specify at least one type to resist.")
 
     # Normalizza tipi
     resist_types_lower = [t.lower() for t in resist_types]
 
     # Verifica che le colonne esistano
-    missing_cols = []
-    for poke_type in resist_types_lower:
-        col = f"against_{poke_type}"
-        if col not in df.columns:
-            missing_cols.append(poke_type)
+    type_cols = [f"against_{t}" for t in resist_types_lower]
+    missing_cols = [
+        t for t, col in zip(resist_types_lower, type_cols) if col not in df.columns
+    ]
 
     if missing_cols:
-        return [
-            TextContent(
-                type="text", text=f"❌ Invalid types: {', '.join(missing_cols)}"
-            )
-        ]
+        return tool_error(f"Invalid types: {', '.join(missing_cols)}")
 
-    # Filtra Pokemon che resistono a TUTTI i tipi
-    filtered_df = df.copy()
+    # OTTIMIZZAZIONE: usa boolean mask invece di filtering sequenziale
+    mask = pd.Series(True, index=df.index)
+    for col in type_cols:
+        mask &= df[col] <= max_multiplier
 
-    for poke_type in resist_types_lower:
-        col = f"against_{poke_type}"
-        filtered_df = filtered_df[filtered_df[col] <= max_multiplier]
+    filtered_df = df[mask].copy()
 
     if filtered_df.empty:
         types_str = ", ".join([t.capitalize() for t in resist_types_lower])
-        return [
-            TextContent(
-                type="text",
-                text=f"❌ No Pokemon found that resist all of: {types_str} (with multiplier <= {max_multiplier})",
-            )
-        ]
+        return tool_empty_result(
+            f"Pokemon resistant to all of: {types_str} (with multiplier <= {max_multiplier})"
+        )
 
-    # Calcola resistance score (media dei multipliers - più basso = meglio)
-    resistance_scores = []
-    for idx, row in filtered_df.iterrows():
-        multipliers = [row[f"against_{t}"] for t in resist_types_lower]
-        avg_multiplier = sum(multipliers) / len(multipliers)
-        resistance_scores.append(avg_multiplier)
+    # OTTIMIZZAZIONE: calcola resistance scores in modo vettorizzato
+    filtered_df["resistance_score"] = calculate_resistance_scores_vectorized(
+        filtered_df, type_cols
+    )
 
-    filtered_df["resistance_score"] = resistance_scores
+    # Ordina e limita risultati
     filtered_df = filtered_df.sort_values("resistance_score").head(limit)
 
     # Formatta output
@@ -127,10 +121,9 @@ async def find_pokemon_resistant_to_types(
         f"**Found**: {len(filtered_df)} Pokemon\n",
     ]
 
-    for idx, row in filtered_df.iterrows():
-        pokemon_types = row["type1"].capitalize()
-        if pd.notna(row.get("type2")):
-            pokemon_types += f"/{row['type2'].capitalize()}"
+    # OTTIMIZZAZIONE: usa to_dict('records') invece di iterrows
+    for row in filtered_df.to_dict("records"):
+        pokemon_types = format_types(row["type1"], row.get("type2"))
 
         # Mostra multipliers per ogni tipo
         resistances = []
@@ -144,7 +137,7 @@ async def find_pokemon_resistant_to_types(
             f"**{row['name']}** ({pokemon_types})\n"
             f"  - Resistances: {resistances_str}\n"
             f"  - Avg Multiplier: {row['resistance_score']:.2f}\n"
-            f"  - BST: {int(row['base_total'])}\n"
+            f"  - BST: {safe_int(row['base_total'])}\n"
         )
 
     return [TextContent(type="text", text="\n".join(result_lines))]

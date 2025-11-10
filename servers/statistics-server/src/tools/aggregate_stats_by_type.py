@@ -25,6 +25,11 @@ Output:
 from mcp.types import TextContent
 import pandas as pd
 from .register import register_tool, ToolNames, ToolArguments, ToolResult
+from utils.pokemon_helper import format_types, safe_int, tool_empty_result
+
+
+# Cache globale per aggregazioni (i dati non cambiano, possiamo cachare tutto)
+_AGGREGATION_CACHE = {}
 
 
 @register_tool(
@@ -74,29 +79,47 @@ async def aggregate_stats_by_type(
             )
         ]
 
-    # Stats da analizzare
-    stats = [
-        "hp",
-        "attack",
-        "defense",
-        "sp_attack",
-        "sp_defense",
-        "speed",
-        "base_total",
-    ]
+    # OTTIMIZZAZIONE: cache delle aggregazioni per evitare di ricalcolare
+    cache_key = (id(df), pokemon_type, primary_only)
 
-    # Calcola aggregazioni
-    aggregations = {}
-    for stat in stats:
-        aggregations[stat] = {
-            "mean": filtered_df[stat].mean(),
-            "median": filtered_df[stat].median(),
-            "max": filtered_df[stat].max(),
-            "min": filtered_df[stat].min(),
+    if cache_key not in _AGGREGATION_CACHE:
+        # Stats da analizzare
+        stats = [
+            "hp",
+            "attack",
+            "defense",
+            "sp_attack",
+            "sp_defense",
+            "speed",
+            "base_total",
+        ]
+
+        # Calcola aggregazioni (in modo vettorizzato!)
+        aggregations = {}
+        for stat in stats:
+            aggregations[stat] = {
+                "mean": filtered_df[stat].mean(),
+                "median": filtered_df[stat].median(),
+                "max": filtered_df[stat].max(),
+                "min": filtered_df[stat].min(),
+            }
+
+        # Trova Pokemon più forte
+        strongest = filtered_df.loc[filtered_df["base_total"].idxmax()]
+
+        # Salva in cache
+        _AGGREGATION_CACHE[cache_key] = {
+            "aggregations": aggregations,
+            "strongest": strongest,
+            "count": len(filtered_df),
         }
 
-    # Trova Pokemon più forte
-    strongest = filtered_df.loc[filtered_df["base_total"].idxmax()]
+    # Recupera da cache
+    cached_data = _AGGREGATION_CACHE[cache_key]
+    aggregations = cached_data["aggregations"]
+    strongest = cached_data["strongest"]
+    count = cached_data["count"]
+    stats = list(aggregations.keys())
 
     # Formatta output
     stat_lines = []
@@ -116,7 +139,7 @@ async def aggregate_stats_by_type(
 ## Aggregate Statistics for {pokemon_type.capitalize()} Type
 
 **Filter**: {type_filter}
-**Total Pokemon**: {len(filtered_df)}
+**Total Pokemon**: {count}
 
 ### Stat Aggregations
 
@@ -124,9 +147,9 @@ async def aggregate_stats_by_type(
 
 ### Strongest {pokemon_type.capitalize()}-type Pokemon
 
-**{strongest['name']}** (#{int(strongest['pokedex_number'])})
-- Base Total: {int(strongest['base_total'])}
-- Type: {strongest['type1'].capitalize()}{f"/{strongest['type2'].capitalize()}" if pd.notna(strongest.get('type2')) else ""}
+**{strongest['name']}** (#{safe_int(strongest['pokedex_number'])})
+- Base Total: {safe_int(strongest['base_total'])}
+- Type: {format_types(strongest['type1'], strongest.get('type2'))}
     """
 
     return [TextContent(type="text", text=result_text)]

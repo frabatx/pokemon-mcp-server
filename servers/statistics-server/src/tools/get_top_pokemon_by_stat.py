@@ -27,6 +27,7 @@ Output:
 from mcp.types import TextContent
 import pandas as pd
 from .register import register_tool, ToolNames, ToolArguments, ToolResult
+from utils.pokemon_helper import format_types, safe_int, tool_error, tool_empty_result
 
 
 @register_tool(
@@ -81,19 +82,21 @@ async def get_top_pokemon_by_stat(
     generation = arguments.get("generation")
 
     if stat not in df.columns:
-        return [TextContent(type="text", text=f"❌ Stat '{stat}' not found.")]
+        return tool_error(f"Stat '{stat}' not found.")
 
-    # Filtra
-    filtered_df = df.copy()
+    # OTTIMIZZAZIONE: usa boolean mask invece di filtering sequenziale
+    mask = pd.Series(True, index=df.index)
 
     if exclude_legendaries:
-        filtered_df = filtered_df[filtered_df["is_legendary"] == 0]
+        mask &= df["is_legendary"] == 0
 
     if generation is not None:
-        filtered_df = filtered_df[filtered_df["generation"] == generation]
+        mask &= df["generation"] == generation
+
+    filtered_df = df[mask].copy()
 
     if filtered_df.empty:
-        return [TextContent(type="text", text="❌ No Pokemon found matching criteria.")]
+        return tool_empty_result("criteria")
 
     # Ordina e prendi top N
     leaderboard = filtered_df.nlargest(limit, stat).reset_index(drop=True)
@@ -111,19 +114,16 @@ async def get_top_pokemon_by_stat(
         f"## Top {limit} Pokemon by {stat.replace('_', ' ').title()}{filter_str}\n"
     ]
 
-    for idx, row in leaderboard.iterrows():
-        rank = idx + 1
-        types_str = row["type1"].capitalize()
-        if pd.notna(row.get("type2")):
-            types_str += f"/{row['type2'].capitalize()}"
-
+    # OTTIMIZZAZIONE: usa to_dict('records') invece di iterrows
+    for idx, row in enumerate(leaderboard.to_dict("records"), start=1):
+        types_str = format_types(row["type1"], row.get("type2"))
         legendary_badge = " 👑" if row["is_legendary"] == 1 else ""
 
         result_lines.append(
-            f"**#{rank}. {row['name']}**{legendary_badge}\n"
-            f"  - {stat.replace('_', ' ').title()}: **{int(row[stat])}**\n"
+            f"**#{idx}. {row['name']}**{legendary_badge}\n"
+            f"  - {stat.replace('_', ' ').title()}: **{safe_int(row[stat])}**\n"
             f"  - Type: {types_str}\n"
-            f"  - BST: {int(row['base_total'])} | Gen {int(row['generation'])}\n"
+            f"  - BST: {safe_int(row['base_total'])} | Gen {safe_int(row['generation'])}\n"
         )
 
     return [TextContent(type="text", text="\n".join(result_lines))]

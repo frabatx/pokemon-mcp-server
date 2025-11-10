@@ -45,16 +45,13 @@ Output:
 
 from mcp.types import TextContent
 import pandas as pd
-import ast
 from .register import register_tool, ToolNames, ToolArguments, ToolResult
-
-
-def parse_abilities_list(abilities_str: str) -> list[str]:
-    """Parse stringa abilities che è formato Python list."""
-    try:
-        return ast.literal_eval(abilities_str)
-    except:
-        return [abilities_str] if abilities_str else []
+from utils.pokemon_helper import (
+    parse_abilities,
+    format_types,
+    safe_int,
+    tool_empty_result,
+)
 
 
 @register_tool(
@@ -239,23 +236,24 @@ async def filter_pokemon_multi_criteria(
 ) -> ToolResult:
     """
     Filtra Pokemon con criteri multipli combinati.
+    OTTIMIZZATO: usa boolean mask invece di filtering sequenziale per miglior performance.
     """
-    # Copia DataFrame per non modificare originale
-    filtered_df = df.copy()
+    # Crea una maschera booleana che parte con tutti True
+    mask = pd.Series(True, index=df.index)
     applied_filters = []  # Track quali filtri sono stati applicati
 
     # FILTRO: Type1
     type1 = arguments.get("type1")
     if type1:
         type1_lower = type1.lower()
-        filtered_df = filtered_df[filtered_df["type1"].str.lower() == type1_lower]
+        mask &= df["type1"].str.lower() == type1_lower
         applied_filters.append(f"type1={type1.capitalize()}")
 
     # FILTRO: Type2
     type2 = arguments.get("type2")
     if type2:
         type2_lower = type2.lower()
-        filtered_df = filtered_df[filtered_df["type2"].str.lower() == type2_lower]
+        mask &= df["type2"].str.lower() == type2_lower
         applied_filters.append(f"type2={type2.capitalize()}")
 
     # FILTRI: Stats (min/max)
@@ -274,69 +272,68 @@ async def filter_pokemon_multi_criteria(
         max_val = arguments.get(max_key)
 
         if min_val is not None:
-            filtered_df = filtered_df[filtered_df[stat_col] >= min_val]
+            mask &= df[stat_col] >= min_val
             applied_filters.append(f"{stat_col}>={min_val}")
 
         if max_val is not None:
-            filtered_df = filtered_df[filtered_df[stat_col] <= max_val]
+            mask &= df[stat_col] <= max_val
             applied_filters.append(f"{stat_col}<={max_val}")
 
     # FILTRI: Physical attributes
     min_weight = arguments.get("min_weight_kg")
     if min_weight is not None:
-        filtered_df = filtered_df[filtered_df["weight_kg"] >= min_weight]
+        mask &= df["weight_kg"] >= min_weight
         applied_filters.append(f"weight>={min_weight}kg")
 
     max_weight = arguments.get("max_weight_kg")
     if max_weight is not None:
-        filtered_df = filtered_df[filtered_df["weight_kg"] <= max_weight]
+        mask &= df["weight_kg"] <= max_weight
         applied_filters.append(f"weight<={max_weight}kg")
 
     min_height = arguments.get("min_height_m")
     if min_height is not None:
-        filtered_df = filtered_df[filtered_df["height_m"] >= min_height]
+        mask &= df["height_m"] >= min_height
         applied_filters.append(f"height>={min_height}m")
 
     max_height = arguments.get("max_height_m")
     if max_height is not None:
-        filtered_df = filtered_df[filtered_df["height_m"] <= max_height]
+        mask &= df["height_m"] <= max_height
         applied_filters.append(f"height<={max_height}m")
 
     # FILTRO: Generation
     generation = arguments.get("generation")
     if generation is not None:
-        filtered_df = filtered_df[filtered_df["generation"] == generation]
+        mask &= df["generation"] == generation
         applied_filters.append(f"gen={generation}")
 
     # FILTRO: Legendary status
     is_legendary = arguments.get("is_legendary")
     if is_legendary is not None:
-        filtered_df = filtered_df[
-            filtered_df["is_legendary"] == (1 if is_legendary else 0)
-        ]
+        mask &= df["is_legendary"] == (1 if is_legendary else 0)
         applied_filters.append(f"legendary={'Yes' if is_legendary else 'No'}")
 
     # FILTRO: Capture rate
     min_capture = arguments.get("min_capture_rate")
     if min_capture is not None:
-        filtered_df = filtered_df[filtered_df["capture_rate"] >= min_capture]
+        mask &= df["capture_rate"] >= min_capture
         applied_filters.append(f"capture_rate>={min_capture}")
 
-    # FILTRO: Abilities
+    # FILTRO: Abilities (questo richiede apply, ma lo facciamo solo una volta)
     abilities_filter = arguments.get("abilities", [])
     if abilities_filter:
 
         def has_ability(abilities_str, target_abilities):
-            pokemon_abilities = parse_abilities_list(abilities_str)
+            pokemon_abilities = parse_abilities(abilities_str)
             return any(
                 ability.lower() in [ta.lower() for ta in target_abilities]
                 for ability in pokemon_abilities
             )
 
-        filtered_df = filtered_df[
-            filtered_df["abilities"].apply(lambda x: has_ability(x, abilities_filter))
-        ]
+        mask &= df["abilities"].apply(lambda x: has_ability(x, abilities_filter))
         applied_filters.append(f"abilities={', '.join(abilities_filter)}")
+
+    # Applica la maschera UNA SOLA VOLTA
+    filtered_df = df[mask].copy()
 
     # Verifica risultati
     if filtered_df.empty:
@@ -372,22 +369,20 @@ async def filter_pokemon_multi_criteria(
         f"**Results**: {total_found} Pokemon found (showing {len(filtered_df)})\n",
     ]
 
-    for idx, row in filtered_df.iterrows():
-        types_str = row["type1"].capitalize()
-        if pd.notna(row.get("type2")):
-            types_str += f"/{row['type2'].capitalize()}"
-
-        abilities = parse_abilities_list(row["abilities"])
+    # Usa to_dict('records') invece di iterrows per performance migliori
+    for row in filtered_df.to_dict("records"):
+        types_str = format_types(row["type1"], row.get("type2"))
+        abilities = parse_abilities(row["abilities"])
         abilities_str = ", ".join(abilities)
 
         result_lines.append(
-            f"**{row['name']}** (#{int(row['pokedex_number'])})\n"
+            f"**{row['name']}** (#{safe_int(row['pokedex_number'])})\n"
             f"  - Type: {types_str}\n"
-            f"  - BST: {int(row['base_total'])}\n"
-            f"  - Stats: HP {int(row['hp'])} | Atk {int(row['attack'])} | Def {int(row['defense'])} | "
-            f"SpA {int(row['sp_attack'])} | SpD {int(row['sp_defense'])} | Spe {int(row['speed'])}\n"
+            f"  - BST: {safe_int(row['base_total'])}\n"
+            f"  - Stats: HP {safe_int(row['hp'])} | Atk {safe_int(row['attack'])} | Def {safe_int(row['defense'])} | "
+            f"SpA {safe_int(row['sp_attack'])} | SpD {safe_int(row['sp_defense'])} | Spe {safe_int(row['speed'])}\n"
             f"  - Abilities: {abilities_str}\n"
-            f"  - Gen {int(row['generation'])}"
+            f"  - Gen {safe_int(row['generation'])}"
             f"{' | Legendary 👑' if row['is_legendary'] == 1 else ''}"
             f" | Weight {row['weight_kg']:.1f}kg | Height {row['height_m']:.1f}m\n"
         )

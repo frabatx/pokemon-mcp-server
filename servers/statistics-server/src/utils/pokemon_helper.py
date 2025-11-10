@@ -4,8 +4,10 @@ Parsing, validazione, formattazione, calcoli comuni.
 """
 
 import ast
-from typing import Optional
+from typing import Optional, Any, Union
 import pandas as pd
+import numpy as np
+from mcp.types import TextContent
 
 
 # ============================================================================
@@ -346,3 +348,255 @@ def filter_by_criteria(
         filtered = filtered[filtered["is_legendary"] == 1]
 
     return filtered
+
+
+# ============================================================================
+# ERROR HANDLING
+# ============================================================================
+
+
+def tool_error(message: str, prefix: str = "❌") -> list[TextContent]:
+    """
+    Crea un errore standardizzato per un tool.
+
+    Args:
+        message: Messaggio di errore
+        prefix: Prefisso (default emoji X)
+
+    Returns:
+        Lista con TextContent formattato
+    """
+    return [TextContent(type="text", text=f"{prefix} {message}")]
+
+
+def tool_validation_error(param: str, expected: str, got: Any) -> list[TextContent]:
+    """
+    Crea un errore di validazione standardizzato.
+
+    Args:
+        param: Nome del parametro
+        expected: Tipo o valore atteso
+        got: Valore ricevuto
+
+    Returns:
+        Lista con TextContent formattato
+    """
+    return tool_error(
+        f"Invalid value for '{param}'. Expected {expected}, got: {got}"
+    )
+
+
+def tool_empty_result(criteria: str) -> list[TextContent]:
+    """
+    Crea un messaggio standardizzato per risultati vuoti.
+
+    Args:
+        criteria: Descrizione dei criteri di ricerca
+
+    Returns:
+        Lista con TextContent formattato
+    """
+    return [TextContent(type="text", text=f"❌ No Pokemon found matching: {criteria}")]
+
+
+# ============================================================================
+# SAFE TYPE CONVERSIONS
+# ============================================================================
+
+
+def safe_int(value: Any, default: int = 0) -> int:
+    """
+    Converte un valore a int in modo sicuro.
+
+    Args:
+        value: Valore da convertire
+        default: Valore di default se conversione fallisce
+
+    Returns:
+        Intero convertito o default
+    """
+    if pd.isna(value):
+        return default
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return default
+
+
+def safe_float(value: Any, default: float = 0.0) -> float:
+    """
+    Converte un valore a float in modo sicuro.
+
+    Args:
+        value: Valore da convertire
+        default: Valore di default se conversione fallisce
+
+    Returns:
+        Float convertito o default
+    """
+    if pd.isna(value):
+        return default
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return default
+
+
+# ============================================================================
+# POKEMON OUTPUT FORMATTING
+# ============================================================================
+
+
+def format_pokemon_list_output(
+    df: pd.DataFrame,
+    title: str,
+    include_abilities: bool = False,
+    include_stats: bool = False,
+    max_results: Optional[int] = None,
+) -> str:
+    """
+    Formatta una lista di Pokemon in output standardizzato.
+
+    Args:
+        df: DataFrame con Pokemon da formattare
+        title: Titolo della sezione
+        include_abilities: Se includere abilities
+        include_stats: Se includere tutti gli stat
+        max_results: Numero massimo di risultati da mostrare
+
+    Returns:
+        Stringa formattata in Markdown
+    """
+    if df.empty:
+        return f"## {title}\n\n**No Pokemon found**"
+
+    if max_results:
+        df = df.head(max_results)
+
+    result_lines = [
+        f"## {title}",
+        f"\n**Found {len(df)} Pokemon**:\n",
+    ]
+
+    # Usa to_dict('records') per performance migliori
+    for row in df.to_dict('records'):
+        types_str = format_types(row["type1"], row.get("type2"))
+
+        line = (
+            f"**{row['name']}** (#{safe_int(row['pokedex_number'])})\n"
+            f"  - Type: {types_str}\n"
+        )
+
+        if include_abilities:
+            abilities = parse_abilities(row.get("abilities", ""))
+            line += f"  - Abilities: {', '.join(abilities)}\n"
+
+        if include_stats:
+            line += (
+                f"  - Stats: HP {safe_int(row['hp'])}, "
+                f"Atk {safe_int(row['attack'])}, "
+                f"Def {safe_int(row['defense'])}, "
+                f"SpA {safe_int(row['sp_attack'])}, "
+                f"SpD {safe_int(row['sp_defense'])}, "
+                f"Spe {safe_int(row['speed'])}\n"
+            )
+
+        line += f"  - BST: {safe_int(row['base_total'])}"
+
+        if row.get("is_legendary") == 1:
+            line += " | Legendary"
+
+        result_lines.append(line + "\n")
+
+    return "\n".join(result_lines)
+
+
+def format_pokemon_detail_output(pokemon: pd.Series) -> str:
+    """
+    Formatta i dettagli completi di un Pokemon.
+
+    Args:
+        pokemon: Serie pandas con dati del Pokemon
+
+    Returns:
+        Stringa formattata in Markdown
+    """
+    abilities = parse_abilities(pokemon.get("abilities", ""))
+    types_str = format_types(pokemon["type1"], pokemon.get("type2"))
+
+    lines = [
+        f"## {pokemon['name']} (#{safe_int(pokemon['pokedex_number'])})",
+        f"\n**Type:** {types_str}",
+        f"**Abilities:** {', '.join(abilities)}",
+        f"**Generation:** {safe_int(pokemon['generation'])}",
+        f"**Legendary:** {'Yes' if pokemon.get('is_legendary') == 1 else 'No'}",
+        "\n### Base Stats:",
+        f"- HP: {create_stat_bar(safe_int(pokemon['hp']))}",
+        f"- Attack: {create_stat_bar(safe_int(pokemon['attack']))}",
+        f"- Defense: {create_stat_bar(safe_int(pokemon['defense']))}",
+        f"- Sp. Attack: {create_stat_bar(safe_int(pokemon['sp_attack']))}",
+        f"- Sp. Defense: {create_stat_bar(safe_int(pokemon['sp_defense']))}",
+        f"- Speed: {create_stat_bar(safe_int(pokemon['speed']))}",
+        f"\n**Base Stat Total:** {safe_int(pokemon['base_total'])}",
+    ]
+
+    return "\n".join(lines)
+
+
+# ============================================================================
+# VECTORIZED OPERATIONS
+# ============================================================================
+
+
+def calculate_resistance_scores_vectorized(
+    df: pd.DataFrame, type_columns: list[str]
+) -> pd.Series:
+    """
+    Calcola resistance scores in modo vettorizzato.
+
+    Args:
+        df: DataFrame con colonne against_*
+        type_columns: Lista di colonne da considerare (es. ['against_fire', 'against_water'])
+
+    Returns:
+        Serie con resistance scores (media dei moltiplicatori)
+    """
+    # Filtra solo le colonne esistenti
+    existing_cols = [col for col in type_columns if col in df.columns]
+
+    if not existing_cols:
+        return pd.Series(0.0, index=df.index)
+
+    # Calcolo vettorizzato: media dei moltiplicatori
+    return df[existing_cols].mean(axis=1)
+
+
+def format_output_vectorized(df: pd.DataFrame) -> list[str]:
+    """
+    Formatta output di Pokemon usando operazioni vettorizzate dove possibile.
+
+    Args:
+        df: DataFrame con Pokemon
+
+    Returns:
+        Lista di stringhe formattate
+    """
+    # Converti a dict records una sola volta (più efficiente di iterrows)
+    records = df.to_dict('records')
+
+    output = []
+    for row in records:
+        types_str = format_types(row["type1"], row.get("type2"))
+
+        line = (
+            f"**{row['name']}** (#{safe_int(row['pokedex_number'])})\n"
+            f"  - Type: {types_str}\n"
+            f"  - BST: {safe_int(row['base_total'])}"
+        )
+
+        if row.get("is_legendary") == 1:
+            line += " | Legendary"
+
+        output.append(line)
+
+    return output

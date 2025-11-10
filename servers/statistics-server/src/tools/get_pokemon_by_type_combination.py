@@ -26,6 +26,7 @@ Output:
 from mcp.types import TextContent
 import pandas as pd
 from .register import register_tool, ToolNames, ToolArguments, ToolResult
+from utils.pokemon_helper import format_types, safe_int, tool_empty_result
 
 
 @register_tool(
@@ -116,17 +117,16 @@ async def get_pokemon_by_type_combination(
         f"\n**Found {len(filtered_df)} Pokemon**:\n",
     ]
 
-    for idx, row in filtered_df.iterrows():
-        types_str = row["type1"].capitalize()
-        if pd.notna(row.get("type2")):
-            types_str += f"/{row['type2'].capitalize()}"
+    # OTTIMIZZAZIONE: usa to_dict('records') invece di iterrows
+    for row in filtered_df.to_dict("records"):
+        types_str = format_types(row["type1"], row.get("type2"))
 
         result_lines.append(
-            f"**{row['name']}** (#{int(row['pokedex_number'])})\n"
+            f"**{row['name']}** (#{safe_int(row['pokedex_number'])})\n"
             f"  - Type: {types_str}\n"
-            f"  - BST: {int(row['base_total'])} | "
-            f"HP {int(row['hp'])} | Atk {int(row['attack'])} | Def {int(row['defense'])} | "
-            f"SpA {int(row['sp_attack'])} | SpD {int(row['sp_defense'])} | Spe {int(row['speed'])}"
+            f"  - BST: {safe_int(row['base_total'])} | "
+            f"HP {safe_int(row['hp'])} | Atk {safe_int(row['attack'])} | Def {safe_int(row['defense'])} | "
+            f"SpA {safe_int(row['sp_attack'])} | SpD {safe_int(row['sp_defense'])} | Spe {safe_int(row['speed'])}"
             f"{' | Legendary' if row['is_legendary'] == 1 else ''}\n"
         )
 

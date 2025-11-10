@@ -25,7 +25,38 @@ Output:
 
 from mcp.types import TextContent
 import pandas as pd
+from functools import lru_cache
 from .register import register_tool, ToolNames, ToolArguments, ToolResult
+from utils.pokemon_helper import tool_error
+
+
+# Cache globale per sorted DataFrames (evita di riordinare ogni volta)
+_SORTED_CACHE = {}
+
+
+def get_sorted_df_cached(df: pd.DataFrame, stat: str) -> pd.DataFrame:
+    """
+    Ottiene DataFrame ordinato per stat con caching.
+
+    OTTIMIZZAZIONE: Cache dei DataFrame ordinati per evitare di riordinare
+    ogni volta che viene chiamato il tool. Questo migliora DRASTICAMENTE
+    le performance per query ripetute.
+
+    Args:
+        df: DataFrame originale
+        stat: Nome della statistica per ordinamento
+
+    Returns:
+        DataFrame ordinato e indicizzato
+    """
+    cache_key = (id(df), stat)
+
+    if cache_key not in _SORTED_CACHE:
+        _SORTED_CACHE[cache_key] = df.sort_values(by=stat, ascending=False).reset_index(
+            drop=True
+        )
+
+    return _SORTED_CACHE[cache_key]
 
 
 @register_tool(
@@ -72,25 +103,18 @@ async def calculate_stat_percentile(
     pokemon_row = df[df["name"].str.lower() == pokemon_name_lower]
 
     if pokemon_row.empty:
-        return [
-            TextContent(
-                type="text", text=f"❌ Pokemon '{pokemon_name}' not found in dataset."
-            )
-        ]
+        return tool_error(f"Pokemon '{pokemon_name}' not found in dataset.")
 
     if stat not in df.columns:
-        return [
-            TextContent(
-                type="text",
-                text=f"❌ Stat '{stat}' not found. Valid stats: hp, attack, defense, sp_attack, sp_defense, speed, base_total",
-            )
-        ]
+        return tool_error(
+            f"Stat '{stat}' not found. Valid stats: hp, attack, defense, sp_attack, sp_defense, speed, base_total"
+        )
 
     pokemon_row = pokemon_row.iloc[0]
     stat_value = int(pokemon_row[stat])
 
-    # Ordina tutti i Pokemon per questa stat
-    sorted_df = df.sort_values(by=stat, ascending=False).reset_index(drop=True)
+    # OTTIMIZZAZIONE: usa cached sorted DataFrame invece di riordinare ogni volta
+    sorted_df = get_sorted_df_cached(df, stat)
 
     # Trova rank del Pokemon
     rank = sorted_df[sorted_df["name"] == pokemon_row["name"]].index[0] + 1
