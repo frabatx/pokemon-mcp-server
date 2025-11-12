@@ -15,8 +15,20 @@ git clone https://github.com/frabatx/pokemon-mcp-servers.git
 cd pokemon-mcp-servers
 
 # Run setup (does everything automatically!)
+## Powershell
 .\setup.ps1
+
+# If the script is not executable on your pc:
+# --> Give access in this session only
+Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
+
+# --> Give access for your user Local Scripts
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
+
+#### Bonus
+You can use .\setup_pretty.ps1 but you need the following: 
+[https://www.nerdfonts.com/](https://www.nerdfonts.com/)
 
 
 ## Overview
@@ -95,6 +107,21 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Windows
 powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# Pip
+pip install uv
+```
+
+### Installing Node.js
+1. Donwload and install Node.js (Windows installer .msi for windows):
+[https://nodejs.org/en/download](https://nodejs.org/en/download)
+
+2. Test installation:
+
+```bash
+nvm -v
+npm -v
+npx -v
 ```
 
 ### Setup & Test
@@ -109,6 +136,7 @@ cd servers/biography-server
 uv sync
 
 # 3. Test server
+cd src
 uv run main.py
 
 # Expected output:
@@ -116,9 +144,14 @@ uv run main.py
 # [START] Pokemon Biography MCP Server
 # [READY] Server listening on stdio
 
-# 4. Test with Inspector (new terminal)
+# 4. Instal MPC Inspector for Testing (new terminal - same path)
+npm install -g @modelcontextprotocol/inspector
+
+# 5. Test with Inspector
 npx @modelcontextprotocol/inspector uv run main.py
-# Open http://localhost:5173
+or
+mcp-inspector uv run main.py
+# Open http://localhost:5173 (it should open automatically)
 ```
 
 ---
@@ -424,10 +457,17 @@ Create the new server structure:
 
 ```bash
 cd servers/
-mkdir my-server
+uv init my-server
+# my-server/
+# ├── main.py                      # Entry point (standardized name)
+# ├── pyproject.toml
+# ├── .python-version
+# └── README.md
 cd my-server
 mkdir src src/tools src/utils
 ```
+
+If needed, modify pyproject.toml and -python-version by setting the desired python version (3.12).
 
 **Target structure:**
 ```
@@ -453,7 +493,7 @@ my-server/
 
 ### STEP 2: pyproject.toml
 
-Create the project configuration file:
+Create the project configuration file (it should be done automatically by uv, but check it):
 
 **Minimal configuration:**
 ```toml
@@ -465,7 +505,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "mcp",
-    # Add your specific dependencies here
+    # Add your specific dependencies here - it should be done using the '''uv add {dependency-name}''' command
 ]
 
 [build-system]
