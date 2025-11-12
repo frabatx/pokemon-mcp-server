@@ -1,0 +1,27 @@
+name: "Get Pokemon Evolutions"
+description: "Get all evolutions of a Pokemon (excluding the input Pokemon itself)"
+category: "evolutions"
+parameters:
+  - name: "name"
+    type: "string"
+    description: "Pokemon name"
+    required: true
+query: |
+  MATCH path = (start:Pokemon {name: $name})-[:EVOLVE*0..]->(intermediate:Pokemon)
+  OPTIONAL MATCH mega_path = (intermediate)-[:MEGA_EVOLVE]->(mega:Pokemon)
+  WITH start, intermediate, mega, 
+      CASE WHEN intermediate = start THEN 0 ELSE length(path) END as base_level,
+      CASE WHEN mega IS NOT NULL THEN 1 ELSE 0 END as is_mega
+  WHERE intermediate <> start OR mega IS NOT NULL
+  RETURN DISTINCT 
+        CASE WHEN mega IS NOT NULL THEN mega.name ELSE intermediate.name END as evolution_name,
+        base_level + is_mega as evolution_level,
+        CASE WHEN mega IS NOT NULL THEN 'MEGA_EVOLVE' ELSE 'EVOLVE' END as evolution_type
+  ORDER BY evolution_level, evolution_type DESC, evolution_name
+examples:
+  - parameters:
+      name: "Charmander"
+    description: "Get Charmander evolutions (Charmeleon, Charizard)"
+  - parameters:
+      name: "Eevee"
+    description: "Get all Eevee evolution possibilities"

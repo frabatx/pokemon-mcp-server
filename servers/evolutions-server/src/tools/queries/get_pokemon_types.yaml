@@ -1,0 +1,18 @@
+name: "Get Pokemon Types"
+description: "Retrieve all types for a specific Pokemon"
+category: "pokemon"
+parameters:
+  - name: "name"
+    type: "string"
+    description: "Pokemon name"
+    required: true
+query: |
+  MATCH (p:Pokemon {name: $name})-[:IS]->(t:Type)
+  RETURN t.name AS type_name
+examples:
+  - parameters:
+      name: "Pikachu"
+    description: "Get Pikachu's types"
+  - parameters:
+      name: "Charizard"
+    description: "Get Charizard's types"
